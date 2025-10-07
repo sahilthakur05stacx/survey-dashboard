@@ -47,8 +47,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const userData = JSON.parse(savedUser);
       setUser(userData);
 
-      // Check if user needs onboarding (except for test@test.com)
-      if (userData.email !== "test@test.com" && !onboardingComplete) {
+      // Check if user needs onboarding
+      if (!onboardingComplete) {
         setNeedsOnboarding(true);
       }
     }
@@ -57,35 +57,62 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (email: string, password: string): Promise<boolean> => {
     setIsLoading(true);
-
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-
-    const userData: User = {
-      id: "1",
-      name: email === "test@test.com" ? "Test User" : "John Doe",
-      email,
-      company: email === "test@test.com" ? "Test Company" : "Acme Corp",
-      avatar: "/diverse-user-avatars.png",
-    };
-
-    setUser(userData);
-    localStorage.setItem("user", JSON.stringify(userData));
-
-    // Skip onboarding for test@test.com
-    if (email === "test@test.com") {
-      localStorage.setItem("onboarding_complete", "true");
-      setNeedsOnboarding(false);
-    } else {
-      // Check if onboarding was completed before
-      const onboardingComplete = localStorage.getItem("onboarding_complete");
-      if (!onboardingComplete) {
-        setNeedsOnboarding(true);
+    try {
+      const response = await axios.post(
+        "http://localhost:3000/api/auth/login",
+        {
+          email,
+          password,
+        }
+      );
+      const payload = (response?.data ?? {}) as {
+        success?: boolean;
+        message?: string;
+        data?: {
+          token?: string;
+          user?: Partial<User> & {
+            id?: string;
+            name?: string;
+            email?: string;
+            company?: string;
+            avatar?: string | null;
+          };
+        };
+      };
+      if (payload && payload.success === false) {
+        throw { message: payload.message || "Login failed" };
       }
-    }
+      const apiUser = payload.data?.user || {};
+      const userData: User = {
+        id: apiUser.id || "",
+        name: apiUser.name || "",
+        email: apiUser.email || email,
+        company: apiUser.company || "",
+        avatar: apiUser.avatar || "/diverse-user-avatars.png",
+      };
+      setUser(userData);
+      localStorage.setItem("user", JSON.stringify(userData));
+      if (payload.data?.token) {
+        localStorage.setItem("auth_token", payload.data.token);
+      }
+      const onboardingComplete = localStorage.getItem("onboarding_complete");
+      setNeedsOnboarding(!onboardingComplete);
 
-    setIsLoading(false);
-    return true;
+      return true;
+    } catch (error: unknown) {
+      if (axios.isAxiosError(error)) {
+        const data = (error.response?.data ?? {}) as {
+          message?: string;
+          errors?: Record<string, string>;
+        };
+        const message = data.message || error.message || "Login failed";
+        const fieldErrors = data.errors || undefined;
+        throw { message, fieldErrors };
+      }
+      throw error instanceof Error ? error : { message: "Login failed" };
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const register = async (
@@ -102,7 +129,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           name,
           // company,
           email,
-          password
+          password,
         }
       );
       console.log(response, "response");
@@ -137,6 +164,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setNeedsOnboarding(false);
     localStorage.removeItem("user");
     localStorage.removeItem("onboarding_complete");
+    localStorage.removeItem("auth_token");
   };
 
   const completeOnboarding = () => {

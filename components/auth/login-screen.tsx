@@ -543,11 +543,7 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
               </TabsContent>
             </Tabs>
 
-            <div className="mt-8 text-center">
-              <p className="text-sm text-gray-500">
-                Demo mode: Use any email/password to continue
-              </p>
-            </div>
+            {/* Removed demo hint */}
           </CardContent>
         </Card>
 
