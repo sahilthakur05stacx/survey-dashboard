@@ -123,7 +123,7 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
     try {
       await register(
         registerForm.name,
-        registerForm.company,
+        // registerForm.company,
         registerForm.email,
         registerForm.password
       );

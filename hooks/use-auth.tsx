@@ -7,7 +7,7 @@ import {
   useEffect,
   type ReactNode,
 } from "react";
-
+import axios from "axios";
 interface User {
   id: string;
   name: string;
@@ -21,7 +21,7 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<boolean>;
   register: (
     name: string,
-    company: string,
+    // company: string,
     email: string,
     password: string
   ) => Promise<boolean>;
@@ -90,15 +90,46 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const register = async (
     name: string,
-    company: string,
+    // company: string,
     email: string,
     password: string
   ): Promise<boolean> => {
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    setIsLoading(true);
+    try {
+      const response = await axios.post(
+        "http://localhost:3000/api/auth/register",
+        {
+          name,
+          // company,
+          email,
+          password
+        }
+      );
+      console.log(response, "response");
 
-    // Don't set user state or store in localStorage - just return success
-    return true;
+      const data = response?.data as
+        | { success?: boolean; message?: string }
+        | undefined;
+      if (data && data.success === false) {
+        throw { message: data.message || "Registration failed" };
+      }
+
+      return true;
+    } catch (error: unknown) {
+      // Re-throw a clean, structured error so UI can show field messages
+      if (axios.isAxiosError(error)) {
+        const data = (error.response?.data ?? {}) as {
+          message?: string;
+          errors?: Record<string, string>;
+        };
+        const message = data.message || error.message || "Registration failed";
+        const fieldErrors = data.errors || undefined;
+        throw { message, fieldErrors };
+      }
+      throw error instanceof Error ? error : { message: "Registration failed" };
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const logout = () => {
