@@ -119,10 +119,14 @@ export default function OnboardingFlow() {
     return question ? answers.get(question.id) : undefined;
   };
 
-  const handleSingleChoice = (questionId: string, choice: string) => {
+  const handleSingleChoice = (
+    questionId: string,
+    choice: string,
+    questionType: "SINGLE" | "MULTI"
+  ) => {
     const newAnswer: Answer = {
       questionId,
-      answer: choice, // Store as string for single choice
+      answer: questionType === "MULTI" ? [choice] : choice, // Array for MULTI, string for SINGLE
       skipped: false,
     };
 
@@ -241,8 +245,12 @@ export default function OnboardingFlow() {
     const answer = getCurrentAnswer();
     if (!answer || answer.skipped) return false;
 
-    // Check if answer exists (string for single choice)
-    return typeof answer.answer === "string" && answer.answer.length > 0;
+    // Check if answer exists (string for SINGLE, array for MULTI)
+    if (question.type === "MULTI") {
+      return Array.isArray(answer.answer) && answer.answer.length > 0;
+    } else {
+      return typeof answer.answer === "string" && answer.answer.length > 0;
+    }
   };
 
   const getStepIcon = (step: number) => {
@@ -395,13 +403,21 @@ export default function OnboardingFlow() {
 
                 <div className="flex flex-wrap gap-3">
                   {currentQuestion.options.choices.map((choice) => {
-                    const isSelected = currentAnswer?.answer === choice;
+                    const isSelected =
+                      currentQuestion.type === "MULTI"
+                        ? Array.isArray(currentAnswer?.answer) &&
+                          currentAnswer.answer.includes(choice)
+                        : currentAnswer?.answer === choice;
 
                     return (
                       <button
                         key={choice}
                         onClick={() => {
-                          handleSingleChoice(currentQuestion.id, choice);
+                          handleSingleChoice(
+                            currentQuestion.id,
+                            choice,
+                            currentQuestion.type
+                          );
                         }}
                         className={getStepColorClasses(currentStep, isSelected)}
                       >
