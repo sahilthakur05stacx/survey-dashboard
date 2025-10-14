@@ -250,11 +250,39 @@ export default function OnboardingFlow() {
       if (currentStep < (progress?.totalSteps || 4)) {
         setCurrentStep(currentStep + 1);
       } else {
-        // Complete onboarding
+        // Complete onboarding - call the complete API
+        const token = localStorage.getItem("auth_token");
+
+        const completeResponse = await fetch(
+          "http://localhost:3000/api/onboarding/complete",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              ...(token && { Authorization: `Bearer ${token}` }),
+            },
+            body: JSON.stringify({}),
+          }
+        );
+
+        if (!completeResponse.ok) {
+          throw new Error("Failed to complete onboarding");
+        }
+
+        // Then update local state
         completeOnboarding();
       }
     } catch (error) {
       // Error already handled in saveAnswer, don't proceed
+      console.error("Error in handleNext:", error);
+      toast({
+        title: "Error",
+        description:
+          error instanceof Error
+            ? error.message
+            : "Failed to complete onboarding. Please try again.",
+        variant: "destructive",
+      });
     }
   };
 
