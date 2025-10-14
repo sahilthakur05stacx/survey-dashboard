@@ -60,14 +60,40 @@ export default function OnboardingFlow() {
   const [answers, setAnswers] = useState<Map<string, Answer>>(new Map());
   const [progress, setProgress] = useState<OnboardingProgress | null>(null);
   const [currentStep, setCurrentStep] = useState(1);
+  const [isAlreadyCompleted, setIsAlreadyCompleted] = useState(false);
 
-  // Fetch onboarding data from API
+  // Check onboarding progress first
   useEffect(() => {
-    const fetchOnboardingData = async () => {
+    const checkOnboardingProgress = async () => {
       try {
         setLoading(true);
         const token = localStorage.getItem("auth_token");
 
+        // First, check if onboarding is already completed
+        const progressResponse = await fetch(
+          "http://localhost:3000/api/onboarding/progress",
+          {
+            headers: {
+              "Content-Type": "application/json",
+              ...(token && { Authorization: `Bearer ${token}` }),
+            },
+          }
+        );
+
+        if (!progressResponse.ok) {
+          throw new Error("Failed to fetch onboarding progress");
+        }
+
+        const progressData = await progressResponse.json();
+
+        if (progressData.success && progressData.data.isCompleted) {
+          // Onboarding is already completed, skip the questions
+          setIsAlreadyCompleted(true);
+          completeOnboarding();
+          return;
+        }
+
+        // If not completed, fetch the full onboarding data
         const response = await fetch("http://localhost:3000/api/onboarding", {
           headers: {
             "Content-Type": "application/json",
@@ -107,8 +133,8 @@ export default function OnboardingFlow() {
       }
     };
 
-    fetchOnboardingData();
-  }, [toast]);
+    checkOnboardingProgress();
+  }, [toast, completeOnboarding]);
 
   const getCurrentQuestion = (): Question | undefined => {
     return questions.find((q) => q.step === currentStep);
@@ -322,6 +348,18 @@ export default function OnboardingFlow() {
     );
   }
 
+  // If onboarding is already completed, don't show the questions
+  if (isAlreadyCompleted) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-amber-50 to-orange-50 flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="w-12 h-12 animate-spin text-amber-600 mx-auto mb-4" />
+          <p className="text-gray-600">Redirecting to dashboard...</p>
+        </div>
+      </div>
+    );
+  }
+
   const currentQuestion = getCurrentQuestion();
   const currentAnswer = getCurrentAnswer();
   const totalSteps = progress?.totalSteps || 4;
@@ -459,13 +497,13 @@ export default function OnboardingFlow() {
               </div>
 
               <div className="flex items-center gap-2">
-                <Button
+                {/* <Button
                   variant="ghost"
                   onClick={handleSkip}
                   className="text-gray-500 hover:text-gray-700"
                 >
                   Skip
-                </Button>
+                </Button> */}
                 <Button
                   onClick={handleNext}
                   disabled={!isStepValid()}
