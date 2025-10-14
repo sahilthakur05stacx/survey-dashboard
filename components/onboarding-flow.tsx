@@ -1,114 +1,322 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Card, CardContent } from "@/components/ui/card"
-import { Textarea } from "@/components/ui/textarea"
-import { ChevronRight, ChevronLeft, Users, Briefcase, Search, CheckCircle, Sparkles, ArrowRight } from "lucide-react"
-import { useAuth } from "@/hooks/use-auth"
+import { useState, useEffect } from "react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import {
+  ChevronRight,
+  ChevronLeft,
+  Users,
+  Briefcase,
+  Search,
+  CheckCircle,
+  Sparkles,
+  ArrowRight,
+  Loader2,
+} from "lucide-react";
+import { useAuth } from "@/hooks/use-auth";
+import { useToast } from "@/hooks/use-toast";
 
-interface OnboardingData {
-  position: string
-  customPosition: string
-  companySize: string
-  howDidYouHear: string
-  goals: string[]
-  expectations: string
+interface Question {
+  id: string;
+  step: number;
+  key: string;
+  type: "SINGLE" | "MULTI";
+  title: string;
+  options: {
+    choices: string[];
+    allowOtherText?: boolean;
+  };
+}
+
+interface Answer {
+  questionId: string;
+  answer?: string | string[] | null;
+  skipped: boolean;
+}
+
+interface OnboardingProgress {
+  totalSteps: number;
+  completed: number;
+  isCompleted: boolean;
+  completedAt: string | null;
+  lastStep: number;
+}
+
+interface OnboardingResponse {
+  success: boolean;
+  data: {
+    questions: Question[];
+    answers: Answer[];
+    progress: OnboardingProgress;
+  };
 }
 
 export default function OnboardingFlow() {
-  const { user, completeOnboarding } = useAuth()
-  const [currentStep, setCurrentStep] = useState(1)
-  const [data, setData] = useState<OnboardingData>({
-    position: "",
-    customPosition: "",
-    companySize: "",
-    howDidYouHear: "",
-    goals: [],
-    expectations: "",
-  })
+  const { user, completeOnboarding } = useAuth();
+  const { toast } = useToast();
+  const [loading, setLoading] = useState(true);
+  const [questions, setQuestions] = useState<Question[]>([]);
+  const [answers, setAnswers] = useState<Map<string, Answer>>(new Map());
+  const [progress, setProgress] = useState<OnboardingProgress | null>(null);
+  const [currentStep, setCurrentStep] = useState(1);
 
-  const totalSteps = 4
+  // Fetch onboarding data from API
+  useEffect(() => {
+    const fetchOnboardingData = async () => {
+      try {
+        setLoading(true);
+        const token = localStorage.getItem("auth_token");
 
-  const positions = [
-    "CEO/Founder",
-    "Product Manager",
-    "Marketing Manager",
-    "UX/UI Designer",
-    "Developer",
-    "Customer Success",
-    "Sales Manager",
-    "Operations",
-    "Other",
-  ]
+        const response = await fetch("http://localhost:3000/api/onboarding", {
+          headers: {
+            "Content-Type": "application/json",
+            ...(token && { Authorization: `Bearer ${token}` }),
+          },
+        });
 
-  const companySizes = [
-    "Just me (1)",
-    "Small team (2-10)",
-    "Growing company (11-50)",
-    "Medium company (51-200)",
-    "Large company (201-1000)",
-    "Enterprise (1000+)",
-  ]
+        if (!response.ok) {
+          throw new Error("Failed to fetch onboarding data");
+        }
 
-  const hearAboutUs = [
-    "Google Search",
-    "Social Media",
-    "Friend/Colleague",
-    "Blog/Article",
-    "Product Hunt",
-    "Conference/Event",
-    "Advertisement",
-    "Other",
-  ]
+        const data: OnboardingResponse = await response.json();
 
-  const goalOptions = [
-    "Collect customer feedback",
-    "Improve user experience",
-    "Increase customer satisfaction",
-    "Reduce support tickets",
-    "Gather product insights",
-    "Monitor brand sentiment",
-  ]
+        if (data.success) {
+          setQuestions(data.data.questions);
+          setProgress(data.data.progress);
 
-  const handleNext = () => {
-    if (currentStep < totalSteps) {
-      setCurrentStep(currentStep + 1)
-    } else {
-      // Complete onboarding
-      completeOnboarding()
+          // Initialize answers map
+          const answersMap = new Map<string, Answer>();
+          data.data.answers.forEach((answer) => {
+            answersMap.set(answer.questionId, answer);
+          });
+          setAnswers(answersMap);
+
+          // Set current step based on progress
+          setCurrentStep(data.data.progress.lastStep || 1);
+        }
+      } catch (error) {
+        console.error("Error fetching onboarding data:", error);
+        toast({
+          title: "Error",
+          description: "Failed to load onboarding questions. Please try again.",
+          variant: "destructive",
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchOnboardingData();
+  }, [toast]);
+
+  const getCurrentQuestion = (): Question | undefined => {
+    return questions.find((q) => q.step === currentStep);
+  };
+
+  const getCurrentAnswer = (): Answer | undefined => {
+    const question = getCurrentQuestion();
+    return question ? answers.get(question.id) : undefined;
+  };
+
+  const handleSingleChoice = (questionId: string, choice: string) => {
+    const newAnswer: Answer = {
+      questionId,
+      answer: choice, // Store as string for single choice
+      skipped: false,
+    };
+
+    setAnswers((prev) => new Map(prev).set(questionId, newAnswer));
+  };
+
+  const saveAnswer = async (answer: Answer) => {
+    try {
+      const token = localStorage.getItem("auth_token");
+
+      // Prepare payload for API
+      const payload = {
+        questionId: answer.questionId,
+        answer: answer.answer,
+      };
+
+      console.log("Sending payload:", payload);
+      console.log("Token:", token ? "Token exists" : "No token");
+
+      const response = await fetch(
+        "http://localhost:3000/api/onboarding/answers",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token && { Authorization: `Bearer ${token}` }),
+          },
+          body: JSON.stringify(payload),
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+        console.error("API Error Response:", errorData);
+        throw new Error(errorData?.message || "Failed to save answer");
+      }
+
+      const result = await response.json();
+      console.log("API Success Response:", result);
+    } catch (error) {
+      console.error("Error saving answer:", error);
+      toast({
+        title: "Error",
+        description:
+          error instanceof Error
+            ? error.message
+            : "Failed to save your answer. Please try again.",
+        variant: "destructive",
+      });
+      throw error; // Re-throw to handle in handleNext
     }
-  }
+  };
+
+  const handleSkip = async () => {
+    const question = getCurrentQuestion();
+    if (!question) return;
+
+    const newAnswer: Answer = {
+      questionId: question.id,
+      answer: null,
+      skipped: true,
+    };
+
+    setAnswers((prev) => new Map(prev).set(question.id, newAnswer));
+
+    try {
+      await saveAnswer(newAnswer);
+
+      if (currentStep < (progress?.totalSteps || 4)) {
+        setCurrentStep(currentStep + 1);
+      }
+    } catch (error) {
+      // Error already handled in saveAnswer
+    }
+  };
+
+  const handleNext = async () => {
+    const question = getCurrentQuestion();
+    const answer = getCurrentAnswer();
+
+    if (!answer || answer.skipped || !answer.answer) {
+      toast({
+        title: "Please select an option",
+        description: "You need to select an option before proceeding.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      // Save answer to API
+      await saveAnswer(answer);
+
+      // Move to next step or complete onboarding
+      if (currentStep < (progress?.totalSteps || 4)) {
+        setCurrentStep(currentStep + 1);
+      } else {
+        // Complete onboarding
+        completeOnboarding();
+      }
+    } catch (error) {
+      // Error already handled in saveAnswer, don't proceed
+    }
+  };
 
   const handleBack = () => {
     if (currentStep > 1) {
-      setCurrentStep(currentStep - 1)
+      setCurrentStep(currentStep - 1);
     }
-  }
+  };
 
-  const handleGoalToggle = (goal: string) => {
-    setData((prev) => ({
-      ...prev,
-      goals: prev.goals.includes(goal) ? prev.goals.filter((g) => g !== goal) : [...prev.goals, goal],
-    }))
-  }
+  const isStepValid = (): boolean => {
+    const question = getCurrentQuestion();
+    if (!question) return false;
 
-  const isStepValid = () => {
-    switch (currentStep) {
+    const answer = getCurrentAnswer();
+    if (!answer || answer.skipped) return false;
+
+    // Check if answer exists (string for single choice)
+    return typeof answer.answer === "string" && answer.answer.length > 0;
+  };
+
+  const getStepIcon = (step: number) => {
+    switch (step) {
       case 1:
-        return data.position !== "" && (data.position !== "Other" || data.customPosition !== "")
+        return <Briefcase className="w-8 h-8 text-amber-600" />;
       case 2:
-        return data.companySize !== ""
+        return <Users className="w-8 h-8 text-orange-600" />;
       case 3:
-        return data.howDidYouHear !== ""
+        return <Search className="w-8 h-8 text-yellow-600" />;
       case 4:
-        return data.goals.length > 0
+        return <CheckCircle className="w-8 h-8 text-amber-600" />;
       default:
-        return true
+        return <Sparkles className="w-8 h-8 text-amber-600" />;
     }
+  };
+
+  const getStepColorClasses = (step: number, isSelected: boolean) => {
+    const baseClasses =
+      "px-4 py-2 rounded-full text-sm font-medium transition-all duration-200";
+
+    switch (step) {
+      case 1:
+        return isSelected
+          ? `${baseClasses} bg-amber-400 text-white shadow-md transform scale-105`
+          : `${baseClasses} bg-gray-100 text-gray-700 hover:bg-amber-100 hover:text-amber-700 hover:shadow-sm`;
+      case 2:
+        return isSelected
+          ? `${baseClasses} bg-orange-400 text-white shadow-md transform scale-105`
+          : `${baseClasses} bg-gray-100 text-gray-700 hover:bg-orange-100 hover:text-orange-700 hover:shadow-sm`;
+      case 3:
+        return isSelected
+          ? `${baseClasses} bg-yellow-400 text-white shadow-md transform scale-105`
+          : `${baseClasses} bg-gray-100 text-gray-700 hover:bg-yellow-100 hover:text-yellow-700 hover:shadow-sm`;
+      case 4:
+        return isSelected
+          ? `${baseClasses} bg-amber-400 text-white shadow-md transform scale-105`
+          : `${baseClasses} bg-gray-100 text-gray-700 hover:bg-amber-100 hover:text-amber-700 hover:shadow-sm`;
+      default:
+        return isSelected
+          ? `${baseClasses} bg-amber-400 text-white shadow-md transform scale-105`
+          : `${baseClasses} bg-gray-100 text-gray-700 hover:bg-amber-100 hover:text-amber-700 hover:shadow-sm`;
+    }
+  };
+
+  const getStepIconBgClass = (step: number) => {
+    switch (step) {
+      case 1:
+        return "w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4";
+      case 2:
+        return "w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4";
+      case 3:
+        return "w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-4";
+      case 4:
+        return "w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4";
+      default:
+        return "w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4";
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-amber-50 to-orange-50 flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="w-12 h-12 animate-spin text-amber-600 mx-auto mb-4" />
+          <p className="text-gray-600">Loading your onboarding...</p>
+        </div>
+      </div>
+    );
   }
+
+  const currentQuestion = getCurrentQuestion();
+  const currentAnswer = getCurrentAnswer();
+  const totalSteps = progress?.totalSteps || 4;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-amber-50 to-orange-50 flex items-center justify-center p-4 relative overflow-hidden">
@@ -144,8 +352,12 @@ export default function OnboardingFlow() {
               SurveyPro
             </span>
           </div>
-          <h1 className="text-3xl font-bold text-gray-800 mb-2">Welcome, {user?.name?.split(" ")[0]}! 👋</h1>
-          <p className="text-gray-600 text-lg">Let's personalize your experience in just a few steps</p>
+          <h1 className="text-3xl font-bold text-gray-800 mb-2">
+            Welcome, {user?.name?.split(" ")[0]}! 👋
+          </h1>
+          <p className="text-gray-600 text-lg">
+            Let's personalize your experience in just a few steps
+          </p>
         </div>
 
         {/* Progress Bar */}
@@ -154,7 +366,9 @@ export default function OnboardingFlow() {
             <span className="text-sm text-gray-500">
               Step {currentStep} of {totalSteps}
             </span>
-            <span className="text-sm text-gray-500">{Math.round((currentStep / totalSteps) * 100)}% complete</span>
+            <span className="text-sm text-gray-500">
+              {Math.round((currentStep / totalSteps) * 100)}% complete
+            </span>
           </div>
           <div className="w-full bg-gray-200 rounded-full h-2">
             <div
@@ -167,147 +381,41 @@ export default function OnboardingFlow() {
         {/* Step Content */}
         <Card className="bg-white/80 border-amber-200 backdrop-blur-xl shadow-xl">
           <CardContent className="p-8">
-            {/* Step 1: Position */}
-            {currentStep === 1 && (
+            {currentQuestion ? (
               <div className="space-y-6">
                 <div className="text-center mb-6">
-                  <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <Briefcase className="w-8 h-8 text-amber-600" />
+                  <div className={getStepIconBgClass(currentStep)}>
+                    {getStepIcon(currentStep)}
                   </div>
-                  <h2 className="text-2xl font-bold text-gray-800 mb-2">What's your role?</h2>
-                  <p className="text-gray-600">Help us understand how you'll be using SurveyPro</p>
+                  <h2 className="text-2xl font-bold text-gray-800 mb-2">
+                    {currentQuestion.title}
+                  </h2>
+                  <p className="text-gray-600">Choose one option</p>
                 </div>
 
                 <div className="flex flex-wrap gap-3">
-                  {positions.map((position) => (
-                    <button
-                      key={position}
-                      onClick={() => setData((prev) => ({ ...prev, position }))}
-                      className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 ${
-                        data.position === position
-                          ? "bg-amber-400 text-white shadow-md transform scale-105"
-                          : "bg-gray-100 text-gray-700 hover:bg-amber-100 hover:text-amber-700 hover:shadow-sm"
-                      }`}
-                    >
-                      {position}
-                    </button>
-                  ))}
-                </div>
+                  {currentQuestion.options.choices.map((choice) => {
+                    const isSelected = currentAnswer?.answer === choice;
 
-                {data.position === "Other" && (
-                  <div className="space-y-2 mt-4">
-                    <Label htmlFor="custom-position" className="text-gray-700">
-                      Please specify your role
-                    </Label>
-                    <Input
-                      id="custom-position"
-                      placeholder="Enter your role"
-                      className="bg-white border-amber-200 focus:border-amber-400 focus:ring-amber-400"
-                      value={data.customPosition}
-                      onChange={(e) => setData((prev) => ({ ...prev, customPosition: e.target.value }))}
-                    />
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Step 2: Company Size */}
-            {currentStep === 2 && (
-              <div className="space-y-6">
-                <div className="text-center mb-6">
-                  <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <Users className="w-8 h-8 text-orange-600" />
-                  </div>
-                  <h2 className="text-2xl font-bold text-gray-800 mb-2">How big is your team?</h2>
-                  <p className="text-gray-600">This helps us recommend the right features for you</p>
-                </div>
-
-                <div className="flex flex-wrap gap-3">
-                  {companySizes.map((size) => (
-                    <button
-                      key={size}
-                      onClick={() => setData((prev) => ({ ...prev, companySize: size }))}
-                      className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 ${
-                        data.companySize === size
-                          ? "bg-orange-400 text-white shadow-md transform scale-105"
-                          : "bg-gray-100 text-gray-700 hover:bg-orange-100 hover:text-orange-700 hover:shadow-sm"
-                      }`}
-                    >
-                      {size}
-                    </button>
-                  ))}
+                    return (
+                      <button
+                        key={choice}
+                        onClick={() => {
+                          handleSingleChoice(currentQuestion.id, choice);
+                        }}
+                        className={getStepColorClasses(currentStep, isSelected)}
+                      >
+                        {choice}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
-            )}
-
-            {/* Step 3: How did you hear about us */}
-            {currentStep === 3 && (
-              <div className="space-y-6">
-                <div className="text-center mb-6">
-                  <div className="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <Search className="w-8 h-8 text-yellow-600" />
-                  </div>
-                  <h2 className="text-2xl font-bold text-gray-800 mb-2">How did you find us?</h2>
-                  <p className="text-gray-600">We'd love to know how you discovered SurveyPro</p>
-                </div>
-
-                <div className="flex flex-wrap gap-3">
-                  {hearAboutUs.map((source) => (
-                    <button
-                      key={source}
-                      onClick={() => setData((prev) => ({ ...prev, howDidYouHear: source }))}
-                      className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 ${
-                        data.howDidYouHear === source
-                          ? "bg-yellow-400 text-white shadow-md transform scale-105"
-                          : "bg-gray-100 text-gray-700 hover:bg-yellow-100 hover:text-yellow-700 hover:shadow-sm"
-                      }`}
-                    >
-                      {source}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Step 4: Goals */}
-            {currentStep === 4 && (
-              <div className="space-y-6">
-                <div className="text-center mb-6">
-                  <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <CheckCircle className="w-8 h-8 text-amber-600" />
-                  </div>
-                  <h2 className="text-2xl font-bold text-gray-800 mb-2">What are your main goals?</h2>
-                  <p className="text-gray-600">Select all that apply - we'll customize your dashboard accordingly</p>
-                </div>
-
-                <div className="flex flex-wrap gap-3">
-                  {goalOptions.map((goal) => (
-                    <button
-                      key={goal}
-                      onClick={() => handleGoalToggle(goal)}
-                      className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 ${
-                        data.goals.includes(goal)
-                          ? "bg-amber-400 text-white shadow-md transform scale-105"
-                          : "bg-gray-100 text-gray-700 hover:bg-amber-100 hover:text-amber-700 hover:shadow-sm"
-                      }`}
-                    >
-                      {goal}
-                    </button>
-                  ))}
-                </div>
-
-                <div className="space-y-2 mt-6">
-                  <Label htmlFor="expectations" className="text-gray-700">
-                    Anything specific you'd like to achieve? (Optional)
-                  </Label>
-                  <Textarea
-                    id="expectations"
-                    placeholder="Tell us about your specific needs or expectations..."
-                    className="bg-white border-amber-200 focus:border-amber-400 focus:ring-amber-400 min-h-[100px]"
-                    value={data.expectations}
-                    onChange={(e) => setData((prev) => ({ ...prev, expectations: e.target.value }))}
-                  />
-                </div>
+            ) : (
+              <div className="text-center py-8">
+                <p className="text-gray-500">
+                  No question available for this step.
+                </p>
               </div>
             )}
 
@@ -334,34 +442,47 @@ export default function OnboardingFlow() {
                 ))}
               </div>
 
-              <Button
-                onClick={handleNext}
-                disabled={!isStepValid()}
-                className="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white shadow-md"
-              >
-                {currentStep === totalSteps ? (
-                  <>
-                    Get Started
-                    <ArrowRight className="w-4 h-4 ml-2" />
-                  </>
-                ) : (
-                  <>
-                    Next
-                    <ChevronRight className="w-4 h-4 ml-2" />
-                  </>
-                )}
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="ghost"
+                  onClick={handleSkip}
+                  className="text-gray-500 hover:text-gray-700"
+                >
+                  Skip
+                </Button>
+                <Button
+                  onClick={handleNext}
+                  disabled={!isStepValid()}
+                  className="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white shadow-md disabled:opacity-50"
+                >
+                  {currentStep === totalSteps ? (
+                    <>
+                      Get Started
+                      <ArrowRight className="w-4 h-4 ml-2" />
+                    </>
+                  ) : (
+                    <>
+                      Next
+                      <ChevronRight className="w-4 h-4 ml-2" />
+                    </>
+                  )}
+                </Button>
+              </div>
             </div>
           </CardContent>
         </Card>
 
         {/* Skip Option */}
         <div className="text-center mt-6">
-          <Button variant="link" onClick={completeOnboarding} className="text-gray-500 hover:text-gray-700">
+          <Button
+            variant="link"
+            onClick={completeOnboarding}
+            className="text-gray-500 hover:text-gray-700"
+          >
             Skip for now
           </Button>
         </div>
       </div>
     </div>
-  )
+  );
 }
