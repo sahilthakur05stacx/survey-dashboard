@@ -118,8 +118,21 @@ export default function OnboardingFlow() {
           });
           setAnswers(answersMap);
 
-          // Set current step based on progress
-          setCurrentStep(data.data.progress.lastStep || 1);
+          // Find the first unanswered question
+          const firstUnansweredQuestion = data.data.questions.find((q) => {
+            const answer = answersMap.get(q.id);
+            return !answer || answer.skipped || !answer.answer;
+          });
+
+          // Set current step to first unanswered question, or lastStep if all are answered
+          if (firstUnansweredQuestion) {
+            setCurrentStep(firstUnansweredQuestion.step);
+            console.log(
+              `Resuming from step ${firstUnansweredQuestion.step}: ${firstUnansweredQuestion.title}`
+            );
+          } else {
+            setCurrentStep(data.data.progress.lastStep || 1);
+          }
         }
       } catch (error) {
         console.error("Error fetching onboarding data:", error);
@@ -289,6 +302,61 @@ export default function OnboardingFlow() {
   const handleBack = () => {
     if (currentStep > 1) {
       setCurrentStep(currentStep - 1);
+    }
+  };
+
+  const handleSkipForNow = async () => {
+    try {
+      const token = localStorage.getItem("auth_token");
+
+      // Get all unanswered questions from current step onwards
+      const unansweredQuestions = questions.filter((q) => {
+        const answer = answers.get(q.id);
+        // Check if question is from current step or later and hasn't been answered
+        return (
+          q.step >= currentStep && (!answer || answer.skipped || !answer.answer)
+        );
+      });
+
+      console.log(
+        "Skipping questions:",
+        unansweredQuestions.map((q) => ({
+          id: q.id,
+          step: q.step,
+          title: q.title,
+        }))
+      );
+
+      // Skip all unanswered questions
+      const skipPromises = unansweredQuestions.map((question) => {
+        console.log(
+          `Skipping question ${question.step}: ${question.title} (ID: ${question.id})`
+        );
+        return fetch("http://localhost:3000/api/onboarding/skip", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token && { Authorization: `Bearer ${token}` }),
+          },
+          body: JSON.stringify({
+            questionId: question.id,
+            reason: "Not applicable to me",
+          }),
+        });
+      });
+
+      await Promise.all(skipPromises);
+      console.log("Successfully skipped all unanswered questions");
+
+      // Complete onboarding after skipping
+      completeOnboarding();
+    } catch (error) {
+      console.error("Error skipping questions:", error);
+      toast({
+        title: "Error",
+        description: "Failed to skip questions. Please try again.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -558,7 +626,7 @@ export default function OnboardingFlow() {
         <div className="text-center mt-6">
           <Button
             variant="link"
-            onClick={completeOnboarding}
+            onClick={handleSkipForNow}
             className="text-gray-500 hover:text-gray-700"
           >
             Skip for now
