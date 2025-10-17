@@ -14,6 +14,12 @@ interface User {
   email: string;
   company: string;
   avatar?: string;
+  defaultTeam?: {
+    id: string;
+    name: string;
+    slug: string;
+    role: string;
+  };
 }
 
 interface AuthContextType {
@@ -76,6 +82,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             email?: string;
             company?: string;
             avatar?: string | null;
+            defaultTeam?: {
+              id: string;
+              name: string;
+              slug: string;
+              role: string;
+            };
           };
         };
       };
@@ -89,6 +101,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         email: apiUser.email || email,
         company: apiUser.company || "",
         avatar: apiUser.avatar || "/diverse-user-avatars.png",
+        defaultTeam: apiUser.defaultTeam,
       };
       setUser(userData);
       localStorage.setItem("user", JSON.stringify(userData));
