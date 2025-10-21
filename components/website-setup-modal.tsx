@@ -34,18 +34,34 @@ export function WebsiteSetupModal({
   const [error, setError] = useState("");
 
   const handleSubmit = async () => {
-    if (!websiteName.trim() || !websiteUrl.trim()) return;
+    console.log("🚀 Website creation started");
+    console.log("📝 Form data:", {
+      websiteName,
+      websiteUrl,
+      websiteDescription,
+    });
+
+    if (!websiteName.trim() || !websiteUrl.trim()) {
+      console.log("❌ Form validation failed - missing required fields");
+      return;
+    }
+
     if (!user?.defaultTeam?.id) {
+      console.log("❌ No team found");
       setError("No team found. Please log in again.");
       return;
     }
 
+    console.log("⏳ Starting website creation process...");
     setIsLoading(true);
     setError("");
 
     try {
       const token = localStorage.getItem("auth_token");
+      console.log("🔑 Auth token exists:", !!token);
+
       if (!token) {
+        console.error("❌ No authentication token found");
         throw new Error("No authentication token found");
       }
 
@@ -56,32 +72,43 @@ export function WebsiteSetupModal({
         description: websiteDescription.trim() || null,
       };
 
-      console.log("Sending website data:", websiteData);
-      console.log(
-        "API URL:",
-        `http://localhost:3000/api/websites/${user.defaultTeam.id}/websites`
-      );
+      const apiUrl = `http://localhost:3000/api/websites/${user.defaultTeam.id}/websites`;
+      console.log("📤 Sending website data:", websiteData);
+      console.log("🌐 API URL:", apiUrl);
 
-      const response = await axios.post(
-        `http://localhost:3000/api/websites/${user.defaultTeam.id}/websites`,
-        websiteData,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-        }
-      );
+      const response = await axios.post(apiUrl, websiteData, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      console.log("📥 API Response received:", {
+        status: response.status,
+        success: response.data.success,
+        data: response.data.data,
+        message: response.data.message,
+      });
 
       if (response.data.success) {
+        console.log("✅ Website created successfully!");
+        console.log(
+          "📊 Created website data:",
+          response.data.data || websiteData
+        );
         onClose(response.data.data || websiteData);
       } else {
+        console.error("❌ API returned success: false", response.data.message);
         throw new Error(response.data.message || "Failed to create website");
       }
     } catch (error: any) {
-      console.error("Error creating website:", error);
-      console.error("Request data sent:", error.request?.data);
-      console.error("Full error response:", error.response?.data);
+      console.error("💥 Error creating website:", error);
+      console.error("🔍 Error details:", {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status,
+        url: error.config?.url,
+      });
 
       // Handle validation errors specifically
       if (
@@ -89,15 +116,18 @@ export function WebsiteSetupModal({
         Array.isArray(error.response.data.errors)
       ) {
         const validationErrors = error.response.data.errors.join(", ");
+        console.error("🚫 Validation errors:", validationErrors);
         setError(`Validation Error: ${validationErrors}`);
       } else {
-        setError(
+        const errorMessage =
           error.response?.data?.message ||
-            error.message ||
-            "Failed to create website"
-        );
+          error.message ||
+          "Failed to create website";
+        console.error("❌ Setting error message:", errorMessage);
+        setError(errorMessage);
       }
     } finally {
+      console.log("🏁 Website creation process completed");
       setIsLoading(false);
     }
   };
