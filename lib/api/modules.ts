@@ -101,20 +101,55 @@ export const setWebsiteModuleEnabled = async (
       throw new Error("No authentication token found");
     }
 
-    const url = `http://localhost:3000/api/website-modules/websites/${websiteId}/modules`;
-    const payload = { websiteId, moduleId, enabled };
-
-    console.log("🌐 API Request:", { url, payload });
-
-    const response = await axios.post(url, payload, {
+    // First, check if the module already exists
+    const listUrl = `http://localhost:3000/api/website-modules/websites/${websiteId}/modules`;
+    const listResponse = await axios.get(listUrl, {
       headers: {
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
       },
     });
 
-    console.log("📥 API Response:", response.data);
-    return response.data;
+    // Find the module that matches our moduleId
+    const modules =
+      listResponse.data?.data ||
+      listResponse.data?.modules ||
+      listResponse.data ||
+      [];
+    const existingModule = modules.find(
+      (m: any) =>
+        m.moduleId === moduleId ||
+        m.module?.id === moduleId ||
+        m.id === moduleId
+    );
+
+    if (existingModule) {
+      // Module exists, use PATCH to update
+      const patchUrl = `http://localhost:3000/api/website-modules/${existingModule.id}`;
+      const patchPayload = { enabled };
+
+      const patchResponse = await axios.patch(patchUrl, patchPayload, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      return patchResponse.data;
+    } else {
+      // Module doesn't exist, use POST to create
+      const url = `http://localhost:3000/api/website-modules/websites/${websiteId}/modules`;
+      const payload = { websiteId, moduleId, enabled };
+
+      const response = await axios.post(url, payload, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      return response.data;
+    }
   } catch (error: any) {
     console.error("💥 API Error:", error);
     console.error("🔍 Error details:", {
