@@ -16,22 +16,31 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { fetchModules, Module, ModulesResponse } from "@/lib/api/modules";
+import {
+  fetchModules,
+  Module,
+  ModulesResponse,
+  setWebsiteModuleEnabled,
+} from "@/lib/api/modules";
+import { useToast } from "@/hooks/use-toast";
 
 interface ModulesOverviewProps {
   onEditModule: (moduleId: string) => void;
   enabledModules: any;
   setEnabledModules: (modules: any) => void;
+  websiteId?: string;
 }
 
 export function ModulesOverview({
   onEditModule,
   enabledModules,
   setEnabledModules,
+  websiteId,
 }: ModulesOverviewProps) {
   const [modules, setModules] = useState<Module[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { toast } = useToast();
 
   // Icon mapping for modules
   const iconMap: { [key: string]: any } = {
@@ -57,7 +66,13 @@ export function ModulesOverview({
         const response = await fetchModules();
 
         if (response && typeof response === "object" && "data" in response) {
-          setModules(response.data);
+          const data: any = response.data;
+          // Set modules from response
+          setModules(
+            Array.isArray(data)
+              ? data
+              : data?.modules || data?.data?.modules || []
+          );
         } else if (Array.isArray(response)) {
           setModules(response);
         }
@@ -72,11 +87,47 @@ export function ModulesOverview({
     loadModules();
   }, []);
 
-  const toggleModule = (moduleId: string) => {
+  const toggleModule = async (moduleId: string, nextValue: boolean) => {
+    console.log("🔄 Toggle module:", { moduleId, nextValue, websiteId });
+
+    // Optimistic UI update
+    const previous = enabledModules[moduleId];
     setEnabledModules({
       ...enabledModules,
-      [moduleId]: !enabledModules[moduleId],
+      [moduleId]: nextValue,
     });
+
+    try {
+      if (!websiteId) {
+        throw new Error("Website ID not found from modules response");
+      }
+
+      console.log("📤 Calling API with:", {
+        websiteId,
+        moduleId,
+        enabled: nextValue,
+      });
+      await setWebsiteModuleEnabled(websiteId, moduleId, nextValue);
+
+      toast({
+        title: nextValue ? "Module enabled" : "Module disabled",
+        description: `${moduleId} has been ${
+          nextValue ? "enabled" : "disabled"
+        }.`,
+      });
+    } catch (e: any) {
+      console.error("❌ Error toggling module:", e);
+
+      // Revert optimistic update on error
+      setEnabledModules({
+        ...enabledModules,
+        [moduleId]: previous,
+      });
+      toast({
+        title: "Failed to update module",
+        description: e?.message || "Please try again",
+      });
+    }
   };
 
   const getStatsDisplay = (module: any) => {
@@ -227,7 +278,9 @@ export function ModulesOverview({
                       </div>
                       <Switch
                         checked={isEnabled}
-                        onCheckedChange={() => toggleModule(module.id)}
+                        onCheckedChange={(checked) =>
+                          toggleModule(module.id, checked)
+                        }
                       />
                     </div>
 

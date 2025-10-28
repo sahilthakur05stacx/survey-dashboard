@@ -266,6 +266,7 @@ export function SurveyEditor({
           onEditModule={handleEditModule}
           enabledModules={enabledModules}
           setEnabledModules={setEnabledModules}
+          websiteId={websiteInfo?.id}
         />
       )}
       {activeTab === "share" && (
