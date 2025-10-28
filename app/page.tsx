@@ -201,8 +201,8 @@ function SurveyDashboard() {
     console.log("🎉 Website created! Refreshing website list...");
     // Refresh websites after creating a new one
     loadWebsites();
-    setCurrentView("dashboard");
-    console.log("🏠 Navigated back to dashboard");
+    // Don't redirect back to dashboard - stay on the website editor
+    console.log("✅ Staying on website editor");
   };
 
   // Library page view

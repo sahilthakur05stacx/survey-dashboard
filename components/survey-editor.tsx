@@ -76,6 +76,12 @@ export function SurveyEditor({
       setShowSetupModal(false);
       console.log("📝 Website info set:", websiteData);
 
+      // Set active tab to "build" to show the modules overview
+      setActiveTab("build");
+      setCurrentView("modules");
+
+      console.log("✅ Redirected to Website Modules page");
+
       // Call the callback to refresh the website list in the parent component
       if (onWebsiteCreated) {
         console.log("🔄 Calling onWebsiteCreated callback...");
