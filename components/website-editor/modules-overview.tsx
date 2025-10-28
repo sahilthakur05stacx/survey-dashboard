@@ -1,8 +1,8 @@
-"use client"
+"use client";
 
-import { Card, CardContent } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Switch } from "@/components/ui/switch"
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import {
   MessageSquare,
   FileText,
@@ -14,60 +14,70 @@ import {
   Star,
   AlertTriangle,
   TrendingUp,
-} from "lucide-react"
+} from "lucide-react";
+import { useEffect, useState } from "react";
+import { fetchModules, Module, ModulesResponse } from "@/lib/api/modules";
 
 interface ModulesOverviewProps {
-  onEditModule: (moduleId: string) => void
-  enabledModules: any
-  setEnabledModules: (modules: any) => void
+  onEditModule: (moduleId: string) => void;
+  enabledModules: any;
+  setEnabledModules: (modules: any) => void;
 }
 
-export function ModulesOverview({ onEditModule, enabledModules, setEnabledModules }: ModulesOverviewProps) {
-  const modules = [
-    {
-      id: "feedback",
-      name: "Feedback & Rating",
-      description: "Collect user feedback and ratings with pre-built forms",
-      icon: MessageSquare,
-      configured: true,
-      stats: { responses: 156, avgRating: 4.2 },
-      color: "bg-blue-500",
-    },
-    {
-      id: "survey",
-      name: "Custom Survey",
-      description: "Create detailed surveys with multiple question types",
-      icon: FileText,
-      configured: false,
-      stats: { surveys: 3, responses: 89 },
-      color: "bg-green-500",
-    },
-    {
-      id: "bug-report",
-      name: "Bug Report",
-      description: "Allow users to report bugs with detailed information",
-      icon: Bug,
-      configured: false,
-      stats: { reports: 0, resolved: 0 },
-      color: "bg-red-500",
-    },
-    {
-      id: "feature-request",
-      name: "Features",
-      description: "Users can upvote existing requests and submit new feature ideas with status tracking",
-      icon: Lightbulb,
-      configured: false,
-      stats: { requests: 0, votes: 0, todo: 0, inProgress: 0, done: 0 },
-      color: "bg-purple-500",
-    },
-  ]
+export function ModulesOverview({
+  onEditModule,
+  enabledModules,
+  setEnabledModules,
+}: ModulesOverviewProps) {
+  const [modules, setModules] = useState<Module[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Icon mapping for modules
+  const iconMap: { [key: string]: any } = {
+    feedback: MessageSquare,
+    survey: FileText,
+    "bug-report": Bug,
+    "feature-request": Lightbulb,
+  };
+
+  // Color mapping for modules
+  const colorMap: { [key: string]: string } = {
+    feedback: "bg-blue-500",
+    survey: "bg-green-500",
+    "bug-report": "bg-red-500",
+    "feature-request": "bg-purple-500",
+  };
+
+  useEffect(() => {
+    const loadModules = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const response = await fetchModules();
+
+        if (response && typeof response === "object" && "data" in response) {
+          setModules(response.data);
+        } else if (Array.isArray(response)) {
+          setModules(response);
+        }
+      } catch (err) {
+        console.error("Error loading modules:", err);
+        setError(err instanceof Error ? err.message : "Failed to load modules");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadModules();
+  }, []);
 
   const toggleModule = (moduleId: string) => {
     setEnabledModules({
       ...enabledModules,
       [moduleId]: !enabledModules[moduleId],
-    })
-  }
+    });
+  };
 
   const getStatsDisplay = (module: any) => {
     switch (module.id) {
@@ -83,7 +93,7 @@ export function ModulesOverview({ onEditModule, enabledModules, setEnabledModule
               <span>{module.stats.avgRating}/5.0</span>
             </div>
           </div>
-        )
+        );
       case "survey":
         return (
           <div className="flex items-center space-x-4 text-sm text-gray-600">
@@ -96,7 +106,7 @@ export function ModulesOverview({ onEditModule, enabledModules, setEnabledModule
               <span>{module.stats.responses} responses</span>
             </div>
           </div>
-        )
+        );
       case "bug-report":
         return (
           <div className="flex items-center space-x-4 text-sm text-gray-600">
@@ -109,7 +119,7 @@ export function ModulesOverview({ onEditModule, enabledModules, setEnabledModule
               <span>{module.stats.resolved} resolved</span>
             </div>
           </div>
-        )
+        );
       case "feature-request":
         return (
           <div className="flex items-center space-x-4 text-sm text-gray-600">
@@ -126,10 +136,38 @@ export function ModulesOverview({ onEditModule, enabledModules, setEnabledModule
               <span>{module.stats.done} completed</span>
             </div>
           </div>
-        )
+        );
       default:
-        return null
+        return null;
     }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex-1 p-6 overflow-y-auto bg-gray-50">
+        <div className="max-w-6xl mx-auto space-y-8">
+          <div className="space-y-2">
+            <h1 className="text-2xl font-bold text-gray-900">
+              Website Modules
+            </h1>
+            <p className="text-gray-600">Loading modules...</p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {[1, 2, 3, 4].map((i) => (
+              <Card key={i} className="border border-gray-200">
+                <CardContent className="p-6">
+                  <div className="animate-pulse space-y-4">
+                    <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+                    <div className="h-3 bg-gray-200 rounded w-1/2"></div>
+                    <div className="h-8 bg-gray-200 rounded"></div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -139,21 +177,33 @@ export function ModulesOverview({ onEditModule, enabledModules, setEnabledModule
         <div className="space-y-2">
           <h1 className="text-2xl font-bold text-gray-900">Website Modules</h1>
           <p className="text-gray-600">
-            Configure and manage the interactive modules for your website. Enable the modules you need and customize
-            them to fit your requirements.
+            Configure and manage the interactive modules for your website.
+            Enable the modules you need and customize them to fit your
+            requirements.
           </p>
+          {error && (
+            <div className="bg-yellow-50 border border-yellow-200 rounded-md p-3">
+              <p className="text-sm text-yellow-800">
+                Warning: {error}. Using default modules.
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Modules Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {modules.map((module) => {
-            const IconComponent = module.icon
-            const isEnabled = enabledModules[module.id]
+            const IconComponent = iconMap[module.id] || MessageSquare;
+            const moduleColor =
+              module.color || colorMap[module.id] || "bg-gray-500";
+            const isEnabled = enabledModules[module.id];
             return (
               <Card
                 key={module.id}
                 className={`border-2 transition-all duration-200 ${
-                  isEnabled ? "border-[#F5C842] bg-white shadow-md" : "border-gray-200 bg-gray-50"
+                  isEnabled
+                    ? "border-[#F5C842] bg-white shadow-md"
+                    : "border-gray-200 bg-gray-50"
                 }`}
               >
                 <CardContent className="p-6">
@@ -161,29 +211,42 @@ export function ModulesOverview({ onEditModule, enabledModules, setEnabledModule
                     {/* Header */}
                     <div className="flex items-start justify-between">
                       <div className="flex items-center space-x-3">
-                        <div className={`p-2 rounded-lg ${module.color} text-white`}>
+                        <div
+                          className={`p-2 rounded-lg ${moduleColor} text-white`}
+                        >
                           <IconComponent className="h-5 w-5" />
                         </div>
                         <div>
-                          <h3 className="text-lg font-semibold text-gray-900">{module.name}</h3>
-                          <p className="text-sm text-gray-600 mt-1">{module.description}</p>
+                          <h3 className="text-lg font-semibold text-gray-900">
+                            {module.name}
+                          </h3>
+                          <p className="text-sm text-gray-600 mt-1">
+                            {module.description}
+                          </p>
                         </div>
                       </div>
-                      <Switch checked={isEnabled} onCheckedChange={() => toggleModule(module.id)} />
+                      <Switch
+                        checked={isEnabled}
+                        onCheckedChange={() => toggleModule(module.id)}
+                      />
                     </div>
 
                     {/* Status Badge */}
                     <div className="flex items-center space-x-2">
                       <div
                         className={`px-2 py-1 rounded-full text-xs font-medium ${
-                          module.configured ? "bg-green-100 text-green-800" : "bg-yellow-100 text-yellow-800"
+                          module.configured
+                            ? "bg-green-100 text-green-800"
+                            : "bg-yellow-100 text-yellow-800"
                         }`}
                       >
                         {module.configured ? "Configured" : "Needs Setup"}
                       </div>
                       <div
                         className={`px-2 py-1 rounded-full text-xs font-medium ${
-                          isEnabled ? "bg-blue-100 text-blue-800" : "bg-gray-100 text-gray-600"
+                          isEnabled
+                            ? "bg-blue-100 text-blue-800"
+                            : "bg-gray-100 text-gray-600"
                         }`}
                       >
                         {isEnabled ? "Active" : "Inactive"}
@@ -191,7 +254,11 @@ export function ModulesOverview({ onEditModule, enabledModules, setEnabledModule
                     </div>
 
                     {/* Stats */}
-                    {isEnabled && <div className="pt-2 border-t border-gray-100">{getStatsDisplay(module)}</div>}
+                    {isEnabled && (
+                      <div className="pt-2 border-t border-gray-100">
+                        {getStatsDisplay(module)}
+                      </div>
+                    )}
 
                     {/* Actions */}
                     <div className="flex items-center space-x-2 pt-2">
@@ -206,7 +273,11 @@ export function ModulesOverview({ onEditModule, enabledModules, setEnabledModule
                         {module.configured ? "Edit" : "Configure"}
                       </Button>
                       {isEnabled && module.configured && (
-                        <Button variant="ghost" size="sm" className="text-xs text-gray-600 hover:text-gray-900">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-xs text-gray-600 hover:text-gray-900"
+                        >
                           <BarChart3 className="h-4 w-4" />
                         </Button>
                       )}
@@ -214,7 +285,7 @@ export function ModulesOverview({ onEditModule, enabledModules, setEnabledModule
                   </div>
                 </CardContent>
               </Card>
-            )
+            );
           })}
         </div>
 
@@ -222,10 +293,14 @@ export function ModulesOverview({ onEditModule, enabledModules, setEnabledModule
         <Card className="border border-gray-200">
           <CardContent className="p-6">
             <div className="space-y-4">
-              <h3 className="text-lg font-semibold text-gray-900">Quick Setup Guide</h3>
+              <h3 className="text-lg font-semibold text-gray-900">
+                Quick Setup Guide
+              </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                 <div className="space-y-2">
-                  <h4 className="font-medium text-gray-900">Getting Started:</h4>
+                  <h4 className="font-medium text-gray-900">
+                    Getting Started:
+                  </h4>
                   <ul className="space-y-1 text-gray-600">
                     <li>• Enable the modules you want to use</li>
                     <li>• Configure each module's settings</li>
@@ -248,5 +323,5 @@ export function ModulesOverview({ onEditModule, enabledModules, setEnabledModule
         </Card>
       </div>
     </div>
-  )
+  );
 }
