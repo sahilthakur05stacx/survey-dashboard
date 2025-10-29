@@ -16,6 +16,7 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { useEffect, useState } from "react";
+import axios from "axios";
 import {
   fetchModules,
   Module,
@@ -40,6 +41,7 @@ export function ModulesOverview({
   const [modules, setModules] = useState<Module[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [initialLoadComplete, setInitialLoadComplete] = useState(false);
   const { toast } = useToast();
 
   // Icon mapping for modules
@@ -59,33 +61,82 @@ export function ModulesOverview({
   };
 
   useEffect(() => {
-    const loadModules = async () => {
+    const loadAllData = async () => {
       try {
         setLoading(true);
         setError(null);
-        const response = await fetchModules();
 
-        if (response && typeof response === "object" && "data" in response) {
-          const data: any = response.data;
-          // Set modules from response
+        // Load modules and website module states in parallel
+        const [modulesResponse, websiteModuleStates] = await Promise.all([
+          fetchModules(),
+          websiteId ? loadWebsiteModuleStates() : Promise.resolve({}),
+        ]);
+
+        // Set modules
+        if (
+          modulesResponse &&
+          typeof modulesResponse === "object" &&
+          "data" in modulesResponse
+        ) {
+          const data: any = modulesResponse.data;
           setModules(
             Array.isArray(data)
               ? data
               : data?.modules || data?.data?.modules || []
           );
-        } else if (Array.isArray(response)) {
-          setModules(response);
+        } else if (Array.isArray(modulesResponse)) {
+          setModules(modulesResponse);
+        }
+
+        // Set website module states
+        if (Object.keys(websiteModuleStates).length > 0) {
+          setEnabledModules({ ...enabledModules, ...websiteModuleStates });
         }
       } catch (err) {
-        console.error("Error loading modules:", err);
-        setError(err instanceof Error ? err.message : "Failed to load modules");
+        console.error("Error loading data:", err);
+        setError(err instanceof Error ? err.message : "Failed to load data");
       } finally {
         setLoading(false);
+        setInitialLoadComplete(true);
       }
     };
 
-    loadModules();
-  }, []);
+    loadAllData();
+  }, [websiteId]);
+
+  // Helper function to load website module states
+  const loadWebsiteModuleStates = async () => {
+    if (!websiteId) return {};
+
+    try {
+      const token = localStorage.getItem("auth_token");
+      if (!token) return {};
+
+      const url = `http://localhost:3000/api/website-modules/websites/${websiteId}/modules`;
+      const { data } = await axios.get(url, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      const list = Array.isArray(data?.data)
+        ? data.data
+        : Array.isArray(data)
+        ? data
+        : data?.modules || [];
+
+      const map: Record<string, boolean> = {};
+      for (const item of list) {
+        const id = item?.moduleId || item?.module?.id || item?.id;
+        if (id != null) map[id] = !!item?.enabled;
+      }
+
+      return map;
+    } catch (err) {
+      return {};
+    }
+  };
 
   const toggleModule = async (moduleId: string, nextValue: boolean) => {
     console.log("🔄 Toggle module:", { moduleId, nextValue, websiteId });
@@ -193,7 +244,7 @@ export function ModulesOverview({
     }
   };
 
-  if (loading) {
+  if (loading || !initialLoadComplete) {
     return (
       <div className="flex-1 p-6 overflow-y-auto bg-gray-50">
         <div className="max-w-6xl mx-auto space-y-8">
